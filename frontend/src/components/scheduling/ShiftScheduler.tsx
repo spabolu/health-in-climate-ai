@@ -5,11 +5,12 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Users, Clock, Thermometer, AlertTriangle } from 'lucide-react';
+import { useHydratedStaticDate } from '@/hooks/use-hydrated-date';
 
 interface Worker {
   id: string;
@@ -44,7 +45,17 @@ export default function ShiftScheduler({
   onUnscheduleWorker,
   className = '',
 }: ShiftSchedulerProps) {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const { currentDate, isHydrated } = useHydratedStaticDate();
+  const [selectedDate, setSelectedDate] = useState(
+    currentDate ? currentDate.toISOString().split('T')[0] : ''
+  );
+
+  // Update selected date when currentDate becomes available after hydration
+  useEffect(() => {
+    if (currentDate && isHydrated && !selectedDate) {
+      setSelectedDate(currentDate.toISOString().split('T')[0]);
+    }
+  }, [currentDate, isHydrated, selectedDate]);
 
   const getRiskColor = (riskLevel: string) => {
     switch (riskLevel) {

@@ -158,6 +158,30 @@ export interface ApiError {
   timestamp: string;
 }
 
+// API Response types for specific endpoints
+export interface AlertsResponse {
+  alerts: HealthAlert[];
+  summary: {
+    total_alerts: number;
+    active_alerts: number;
+    critical_alerts: number;
+    filtered_count: number;
+  };
+  filters_applied: {
+    worker_id?: string;
+    status?: string;
+    severity?: string;
+  };
+  timestamp: string;
+}
+
+export interface AlertActionResponse {
+  success: boolean;
+  message: string;
+  alert: HealthAlert;
+  timestamp: string;
+}
+
 // Real-time data streaming types
 export interface RealTimeUpdate {
   type: 'biometric_update' | 'alert' | 'environmental_change' | 'worker_status';

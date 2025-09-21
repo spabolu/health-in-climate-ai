@@ -6,6 +6,7 @@
 'use client';
 
 import { useDashboardMetrics, useHealthAlerts } from '@/hooks/use-thermal-comfort';
+import { useHydratedStaticDate } from '@/hooks/use-hydrated-date';
 import DashboardLayout, {
   DashboardPageContainer,
   DashboardGrid,
@@ -31,6 +32,18 @@ import {
 export default function DashboardPage() {
   const { metrics, isLoading, error } = useDashboardMetrics();
   const { alerts, criticalAlerts, unacknowledgedAlerts } = useHealthAlerts();
+  const { isHydrated } = useHydratedStaticDate();
+
+  // Safe timestamp formatting to prevent hydration mismatches
+  const safeFormatTime = (timestamp: string): string => {
+    if (!isHydrated) return '--:--';
+    return new Date(timestamp).toLocaleTimeString();
+  };
+
+  const safeFormatCurrentTime = (): string => {
+    if (!isHydrated) return '--:--';
+    return new Date().toLocaleTimeString();
+  };
 
   return (
     <DashboardLayout>
@@ -127,7 +140,7 @@ export default function DashboardPage() {
                       <div className="flex items-center justify-between">
                         <Badge variant="destructive">{alert.severity}</Badge>
                         <span className="text-xs text-gray-500">
-                          {new Date(alert.timestamp).toLocaleTimeString()}
+                          {safeFormatTime(alert.timestamp)}
                         </span>
                       </div>
                       <p className="font-medium text-gray-900 mt-1">{alert.message}</p>
@@ -196,7 +209,7 @@ export default function DashboardPage() {
                   <span className="text-sm text-gray-600">Last Update</span>
                 </div>
                 <span className="text-sm text-gray-500">
-                  {new Date().toLocaleTimeString()}
+                  {safeFormatCurrentTime()}
                 </span>
               </div>
             </div>
@@ -224,7 +237,7 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">{alert.alert_type.replace('_', ' ')}</span>
                       <span className="text-xs text-gray-500">
-                        {new Date(alert.timestamp).toLocaleTimeString()}
+                        {safeFormatTime(alert.timestamp)}
                       </span>
                     </div>
                     <p className="text-sm text-gray-600">{alert.message}</p>

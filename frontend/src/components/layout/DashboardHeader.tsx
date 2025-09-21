@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useDashboardMetrics, useHealthAlerts } from '@/hooks/use-thermal-comfort';
+import { useHydratedDate } from '@/hooks/use-hydrated-date';
 import {
   AlertTriangle,
   Shield,
@@ -33,17 +34,8 @@ import {
 export default function DashboardHeader() {
   const { metrics, isLoading, isRefreshing, error } = useDashboardMetrics();
   const { criticalAlerts, unacknowledgedAlerts } = useHealthAlerts();
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const { currentDate, isHydrated, formatTime, formatDate } = useHydratedDate();
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected');
-
-  // Update current time every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
 
   // Simulate connection status for demo
   useEffect(() => {
@@ -72,24 +64,6 @@ export default function DashboardHeader() {
       default:
         return 'bg-gray-500';
     }
-  };
-
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour12: true,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
   };
 
   return (
@@ -245,10 +219,10 @@ export default function DashboardHeader() {
           {/* Current Time */}
           <div className="hidden md:block text-right">
             <div className="text-sm font-medium text-gray-900">
-              {formatTime(currentTime)}
+              {formatTime(currentDate)}
             </div>
             <div className="text-xs text-gray-500">
-              {formatDate(currentTime)}
+              {formatDate(currentDate)}
             </div>
           </div>
         </div>
