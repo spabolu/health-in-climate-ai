@@ -139,15 +139,15 @@ class ThermalComfortPredictor:
         
         return {
             'timestamp': datetime.now().isoformat(),
-            'predicted_class': predicted_class,
-            'comfort_score_standard': round(standard_scores[0], 4),
-            'comfort_score_conservative': round(conservative_scores[0], 4),
-            'comfort_score_final': round(final_score, 4),
+            'predicted_class': str(predicted_class),
+            'comfort_score_standard': round(float(standard_scores[0]), 4),
+            'comfort_score_conservative': round(float(conservative_scores[0]), 4),
+            'comfort_score_final': round(float(final_score), 4),
             'comfort_level': comfort_level,
-            'confidence': round(confidence, 3),
-            'conservative_bias': conservative_bias,
+            'confidence': round(float(confidence), 3),
+            'conservative_bias': float(conservative_bias),
             'class_probabilities': {
-                class_name: round(prob, 3) 
+                class_name: round(float(prob), 3)
                 for class_name, prob in zip(self.label_encoder.classes_, probabilities)
             },
             'risk_assessment': self._assess_risk(final_score),

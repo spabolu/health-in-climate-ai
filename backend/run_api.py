@@ -78,7 +78,7 @@ def main():
     
     try:
         app.run(
-            debug=False,  # Set to False for production
+            debug=True,
             host='0.0.0.0',
             port=5000,
             threaded=True
