@@ -1,5 +1,25 @@
-# Health In Climate AI Hackathon
-# Aegis AI
+# Health In Climate AI Hackathon (Aegis AI)
+
+## Install / Run Steps
+- In the working folder, run the following commands for the frontend (React/TypeScript): 
+
+```bash
+npm install
+```
+```bash
+npm run dev
+```
+
+- In the working folder, run the following commands for the backend (Python/Flask): 
+
+```bash
+pip install -r requirements.txt
+```
+```bash
+python main.py
+```
+
+---
 
 ## Problem & Users
 Heat stress poses a significant human and financial burden in the United States, contributing to hundreds of worker deaths and over **$1 billion in annual medical costs**. Current safety practices are largely **reactive and compliance-driven**, relying on generic checklists and weather alerts without incorporating **real-time health monitoring**. This leaves workers vulnerable to heat exhaustion and stroke while also creating major inefficiencies for employers.  
@@ -10,7 +30,7 @@ For example, unmanaged heat stress leads to **productivity losses in the constru
 
 ## Data Sources
 - [Heat stress impacts workers and the bottom line | Harvard T.H. Chan School of Public Health](https://www.hsph.harvard.edu/)  
-- [WHO/WMO Guidance to Protect Workers from Increasing Heat Stress](https://www.who.int/)  
+- [WHO/WMO Guidance to Protect Workers from Increasing Heat Stress](https://www.who.int/news/item/22-08-2025-who-wmo-issue-new-report-and-guidance-to-protect-workers-from-increasing-heat-stress)  
 - [Occupational Heat Stress and Kidney Health: From Farms to Factories - PMC](https://www.ncbi.nlm.nih.gov/pmc/)  
 - [IEEE DataPort: Forecasting Thermal Comfort Sensations for Heatstroke Prevention](https://ieee-dataport.org/)  
 
