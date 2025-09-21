@@ -78,9 +78,9 @@ const mockDashboardMetrics: DashboardMetrics = {
   },
   timestamp: new Date().toISOString(),
   system_status: 'operational',
-  model_accuracy: 0.87,
+  model_accuracy: 0.927,
   data_quality_score: 0.92,
-  compliance_score: 0.95,
+  compliance_score: 0.952,
 }
 
 const mockRecentAlerts: Alert[] = [

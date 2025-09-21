@@ -46,9 +46,9 @@ const mockDashboardMetrics: DashboardMetrics = {
     'very_uncomfortable': 2
   },
   location_metrics: {
-    'Factory Floor A': { workers_count: 25, active_alerts: 2, risk_level: 'moderate' },
-    'Factory Floor B': { workers_count: 22, active_alerts: 1, risk_level: 'low' },
-    'Warehouse': { workers_count: 18, active_alerts: 3, risk_level: 'high' },
+    'Construction Site A': { workers_count: 25, active_alerts: 2, risk_level: 'moderate' },
+    'Construction Site B': { workers_count: 22, active_alerts: 1, risk_level: 'low' },
+    'Machinery Operations': { workers_count: 18, active_alerts: 3, risk_level: 'high' },
     'Loading Dock': { workers_count: 15, active_alerts: 1, risk_level: 'moderate' },
     'Office Area': { workers_count: 7, active_alerts: 0, risk_level: 'low' }
   },
