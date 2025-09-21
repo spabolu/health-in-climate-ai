@@ -5,11 +5,11 @@
 # instance/*
 # !instance/.gitignore
 # .webassets-cache
-# .env
+.env
 
 # ### Flask.Python Stack ###
 # # Byte-compiled / optimized / DLL files
-# __pycache__/
+__pycache__/
 # *.py[cod]
 # *$py.class
 
@@ -129,9 +129,9 @@
 # *.sage.py
 
 # # Environments
-# .venv
+.venv
 # env/
-# venv/
+venv/
 # ENV/
 # env.bak/
 # venv.bak/
@@ -217,7 +217,10 @@
 
 # ### NextJS ###
 # # dependencies
-# /node_modules
+/node_modules
+
+.kiro
+.claude
 # /.pnp
 # .pnp.js
 
