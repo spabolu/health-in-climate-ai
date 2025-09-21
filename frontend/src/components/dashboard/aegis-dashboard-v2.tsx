@@ -1,31 +1,29 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import {
-  Shield,
-  Users,
-  AlertTriangle,
-  Thermometer,
-  Wind,
-  Activity,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Heart,
-  Droplets,
-  Monitor,
-  Bell,
-  Calendar
-} from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { RealTimeMonitor } from './real-time-monitor'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { Alert, DashboardMetrics } from '@/types'
+import {
+  Activity,
+  AlertTriangle,
+  Bell,
+  Calendar,
+  CheckCircle,
+  Clock,
+  Droplets,
+  Monitor,
+  Shield,
+  Thermometer,
+  Users,
+  Wind
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { AlertCenter } from '../alerts/alert-center'
 import { NotificationSystem } from '../alerts/notification-system'
 import { ComplianceDashboard } from '../compliance/compliance-dashboard'
 import { ShiftScheduler } from '../scheduling/shift-scheduler'
-import type { DashboardMetrics, Worker, Alert } from '@/types'
+import { RealTimeMonitor } from './real-time-monitor'
 
 // Mock data for development - will be replaced with API calls
 const mockDashboardMetrics: DashboardMetrics = {
@@ -202,11 +200,11 @@ export function AegisDashboard() {
           >
             <Bell className="h-4 w-4 inline-block mr-2" />
             Alert Center
-            {alerts.filter(a => !a.acknowledged && !a.resolved).length > 0 && (
+            {/* {alerts.filter(a => !a.acknowledged && !a.resolved).length > 0 && (
               <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
                 {alerts.filter(a => !a.acknowledged && !a.resolved).length}
               </Badge>
-            )}
+            )} */}
           </button>
           <button
             onClick={() => setActiveTab('compliance')}
