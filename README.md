@@ -1,5 +1,5 @@
 # Health In Climate AI Hackathon
-# Aegis
+# Aegis AI
 
 ## Problem & Users
 Heat stress poses a significant human and financial burden in the United States, contributing to hundreds of worker deaths and over **$1 billion in annual medical costs**. Current safety practices are largely **reactive and compliance-driven**, relying on generic checklists and weather alerts without incorporating **real-time health monitoring**. This leaves workers vulnerable to heat exhaustion and stroke while also creating major inefficiencies for employers.  
