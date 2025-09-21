@@ -160,6 +160,101 @@ def predict():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/dashboard/metrics', methods=['GET', 'OPTIONS'])
+@require_auth
+def get_dashboard_metrics():
+    """Dashboard metrics for live monitoring display"""
+    try:
+        # Generate realistic metrics for demo
+        current_time = datetime.now(timezone.utc)
+
+        # Simulate some variability based on time of day
+        hour = current_time.hour
+        temp_base = 28 + (hour - 12) * 0.5 if 6 <= hour <= 18 else 24
+
+        # Generate realistic worker data
+        total_workers = random.randint(45, 55)
+        active_workers = random.randint(35, min(45, total_workers))
+        workers_at_risk = random.randint(0, max(1, int(active_workers * 0.1)))
+
+        metrics = {
+            "total_workers": total_workers,
+            "active_workers": active_workers,
+            "workers_at_risk": workers_at_risk,
+            "critical_alerts": random.randint(0, workers_at_risk),
+            "compliance_score": random.randint(85, 98),
+            "average_temperature": round(temp_base + random.uniform(-2, 3), 1),
+            "average_humidity": round(60 + random.uniform(-15, 20), 1),
+            "system_status": "online",
+            "last_updated": current_time.isoformat()
+        }
+
+        return jsonify(metrics)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/alerts', methods=['GET', 'OPTIONS'])
+@require_auth
+def get_alerts():
+    """Health alerts for dashboard display"""
+    try:
+        # Generate demo alerts based on current conditions
+        current_time = datetime.now(timezone.utc)
+        alerts = []
+
+        # Generate 0-3 alerts for demo
+        num_alerts = random.randint(0, 3)
+
+        alert_types = [
+            {
+                "type": "heat_exhaustion_risk",
+                "severity": "high",
+                "message": "Worker showing elevated heat stress indicators",
+                "actions": ["Move to shaded area", "Provide cool water", "Monitor vitals"]
+            },
+            {
+                "type": "dehydration_warning",
+                "severity": "medium",
+                "message": "Worker may be experiencing dehydration symptoms",
+                "actions": ["Increase fluid intake", "Take cooling break", "Monitor symptoms"]
+            },
+            {
+                "type": "temperature_alert",
+                "severity": "critical",
+                "message": "Dangerous heat levels detected in work area",
+                "actions": ["Evacuate area immediately", "Contact safety team", "Provide medical assistance"]
+            }
+        ]
+
+        for i in range(num_alerts):
+            alert_type = random.choice(alert_types)
+            alert = {
+                "id": f"alert-{int(time.time())}-{i}",
+                "worker_id": f"worker-{random.randint(1, 50):03d}",
+                "alert_type": alert_type["type"],
+                "severity": alert_type["severity"],
+                "message": alert_type["message"],
+                "recommended_actions": alert_type["actions"],
+                "timestamp": current_time.isoformat(),
+                "acknowledged": False,
+                "resolved": False,
+                "location": f"Zone {random.choice(['A', 'B', 'C', 'D'])} - Sector {random.randint(1, 5)}"
+            }
+            alerts.append(alert)
+
+        return jsonify({
+            "alerts": alerts,
+            "summary": {
+                "total": len(alerts),
+                "unacknowledged": len(alerts),
+                "critical": len([a for a in alerts if a["severity"] == "critical"])
+            }
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({"error": "Endpoint not found"}), 404
@@ -169,15 +264,17 @@ def internal_error(error):
     return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == '__main__':
-    print("🚀 Starting HeatGuard Pro Ultra-Minimal Demo Server...")
-    print("📊 Serving ONLY the core prediction endpoint for business demonstrations")
-    print("🔗 Available endpoint:")
+    print("🚀 Starting HeatGuard Pro Business Demo Server...")
+    print("📊 Serving endpoints for comprehensive business demonstrations")
+    print("🔗 Available endpoints:")
     print("   - /api/v1/predict (XGBoost heat stress predictions)")
+    print("   - /api/dashboard/metrics (Live dashboard metrics)")
+    print("   - /api/alerts (Worker health alerts)")
     print()
 
     app.run(
         host='0.0.0.0',
-        port=8001,
+        port=8000,
         debug=True,
         use_reloader=False
     )

@@ -208,7 +208,7 @@ export function useHealthAlerts(workerId?: string) {
   // Fetch alerts on mount or when workerId changes
   useEffect(() => {
     fetchAlerts();
-  }, [fetchAlerts]);
+  }, [workerId]);
 
   return {
     alerts,
@@ -264,7 +264,7 @@ export function useDashboardMetrics() {
     }, refreshInterval);
 
     return () => clearInterval(interval);
-  }, [fetchMetrics, refreshInterval]);
+  }, [refreshInterval]);
 
   return {
     metrics,
