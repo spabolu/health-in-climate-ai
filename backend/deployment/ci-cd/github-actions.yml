@@ -1,0 +1,497 @@
+# GitHub Actions CI/CD Pipeline for HeatGuard Predictive Safety System
+# Provides automated testing, building, and deployment
+
+name: HeatGuard CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop, 'release/*']
+    tags: ['v*']
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run nightly security scans
+    - cron: '0 2 * * *'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/heatguard-api
+  PYTHON_VERSION: '3.9'
+  NODE_VERSION: '18'
+
+jobs:
+  # Code Quality and Security Checks
+  code-quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for better analysis
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+        pip install black flake8 bandit safety mypy pytest-cov
+
+    - name: Run Black formatting check
+      run: |
+        cd backend
+        black --check --diff .
+
+    - name: Run Flake8 linting
+      run: |
+        cd backend
+        flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 app/ --count --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Run MyPy type checking
+      run: |
+        cd backend
+        mypy app/ --ignore-missing-imports
+
+    - name: Run Bandit security analysis
+      run: |
+        cd backend
+        bandit -r app/ -f json -o bandit-report.json
+        bandit -r app/ --severity-level medium
+
+    - name: Check for known security vulnerabilities
+      run: |
+        cd backend
+        safety check --json --output safety-report.json || true
+        safety check
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          backend/bandit-report.json
+          backend/safety-report.json
+        retention-days: 30
+
+    # SonarCloud analysis
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # Unit and Integration Tests
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio pytest-mock pytest-cov
+
+    - name: Run unit tests
+      env:
+        REDIS_URL: redis://localhost:6379/0
+        DEBUG: true
+        LOG_LEVEL: debug
+      run: |
+        cd backend
+        pytest tests/ -v --cov=app --cov-report=xml --cov-report=html --cov-report=term
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: backend/coverage.xml
+        flags: unittests
+        name: codecov-${{ matrix.python-version }}
+
+    - name: Store coverage HTML report
+      uses: actions/upload-artifact@v4
+      if: matrix.python-version == '3.9'
+      with:
+        name: coverage-report
+        path: backend/htmlcov/
+        retention-days: 30
+
+  # API Load Testing
+  load-test:
+    name: Load Testing
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Start test server
+      run: |
+        cd backend
+        pip install -r requirements.txt
+        python demo_api_server.py &
+        sleep 10
+
+    - name: Install k6
+      run: |
+        sudo gpg -k
+        sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+        echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+        sudo apt-get update
+        sudo apt-get install k6
+
+    - name: Run load tests
+      run: |
+        cd backend/tests
+        k6 run --out json=load-test-results.json load-test.js
+
+    - name: Upload load test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: load-test-results
+        path: backend/tests/load-test-results.json
+
+  # Container Build and Security Scan
+  build-and-scan:
+    name: Build & Scan Container
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+
+    - name: Build and push container image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: backend
+        file: backend/deployment/docker/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          VERSION=${{ github.sha }}
+          BUILD_DATE=${{ github.run_id }}
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Run Snyk to check for vulnerabilities
+      uses: snyk/actions/docker@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  # Deploy to Development Environment
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: build-and-scan
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: development
+      url: https://api-dev.heatguard.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.DEV_KUBECONFIG }}
+
+    - name: Deploy to development
+      run: |
+        cd backend/deployment/kubernetes
+
+        # Update image tag in deployment
+        sed -i "s|image: heatguard/api:.*|image: ${{ needs.build-and-scan.outputs.image-tag }}|g" deployment.yaml
+
+        # Apply configurations
+        kubectl apply -f namespace.yaml
+        kubectl apply -f configmap.yaml
+        kubectl apply -f secrets.yaml
+        kubectl apply -f volumes.yaml
+        kubectl apply -f deployment.yaml
+        kubectl apply -f service.yaml
+        kubectl apply -f ingress.yaml
+
+        # Wait for deployment to complete
+        kubectl wait --for=condition=available --timeout=300s deployment/heatguard-api -n heatguard
+
+    - name: Run smoke tests
+      run: |
+        # Wait for service to be ready
+        sleep 30
+
+        # Run basic health checks
+        curl -f https://api-dev.heatguard.com/api/v1/health
+
+        # Run API integration tests
+        cd backend/tests
+        python integration_tests.py --environment=dev
+
+  # Deploy to Staging Environment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-and-scan, deploy-dev]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: https://api-staging.heatguard.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.STAGING_KUBECONFIG }}
+
+    - name: Deploy to staging
+      run: |
+        cd backend/deployment/kubernetes
+
+        # Update image tag
+        sed -i "s|image: heatguard/api:.*|image: ${{ needs.build-and-scan.outputs.image-tag }}|g" deployment.yaml
+
+        # Apply configurations with staging overrides
+        kubectl apply -f namespace.yaml
+        kubectl apply -f configmap.yaml
+        kubectl apply -f secrets.yaml
+        kubectl apply -f volumes.yaml
+        kubectl apply -f deployment.yaml
+        kubectl apply -f service.yaml
+        kubectl apply -f ingress.yaml
+
+        # Wait for deployment
+        kubectl wait --for=condition=available --timeout=300s deployment/heatguard-api -n heatguard
+
+    - name: Run comprehensive tests
+      run: |
+        sleep 30
+
+        # Health checks
+        curl -f https://api-staging.heatguard.com/api/v1/health
+
+        # Full test suite
+        cd backend/tests
+        python integration_tests.py --environment=staging
+        python performance_tests.py --environment=staging
+
+  # Production Deployment (Manual Approval Required)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-and-scan, deploy-staging]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://api.heatguard.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.PROD_KUBECONFIG }}
+
+    - name: Blue-Green Deployment
+      run: |
+        cd backend/deployment/kubernetes
+
+        # Create green deployment
+        sed -i "s|name: heatguard-api|name: heatguard-api-green|g" deployment.yaml
+        sed -i "s|image: heatguard/api:.*|image: ${{ needs.build-and-scan.outputs.image-tag }}|g" deployment.yaml
+
+        kubectl apply -f deployment.yaml
+
+        # Wait for green deployment
+        kubectl wait --for=condition=available --timeout=600s deployment/heatguard-api-green -n heatguard
+
+        # Health check green deployment
+        kubectl port-forward deployment/heatguard-api-green 8080:8000 -n heatguard &
+        sleep 5
+        curl -f http://localhost:8080/api/v1/health
+
+        # Switch traffic to green
+        kubectl patch service heatguard-api-service -n heatguard -p '{"spec":{"selector":{"version":"green"}}}'
+
+        # Verify production health
+        sleep 30
+        curl -f https://api.heatguard.com/api/v1/health
+
+        # Clean up old blue deployment
+        kubectl delete deployment heatguard-api -n heatguard || true
+
+    - name: Production smoke tests
+      run: |
+        cd backend/tests
+        python production_smoke_tests.py
+
+  # Performance Monitoring and Alerts
+  performance-monitoring:
+    name: Performance Monitoring
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run performance benchmarks
+      run: |
+        cd backend/tests
+        python performance_benchmarks.py --environment=production
+
+    - name: Update performance metrics
+      run: |
+        # Send metrics to monitoring system
+        curl -X POST "${{ secrets.METRICS_ENDPOINT }}" \
+          -H "Authorization: Bearer ${{ secrets.METRICS_TOKEN }}" \
+          -d @performance-results.json
+
+  # Release Management
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Generate changelog
+      run: |
+        # Generate changelog from git commits
+        git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD > changelog.md
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        body_path: changelog.md
+        files: |
+          backend/deployment/kubernetes/*.yaml
+          backend/docs/*.md
+        generate_release_notes: true
+        prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+
+    - name: Update documentation
+      run: |
+        # Update API documentation and deployment guides
+        echo "Documentation updated for release ${{ github.ref_name }}"
+
+# Cleanup job for failed deployments
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    if: failure()
+    needs: [deploy-dev, deploy-staging, deploy-production]
+
+    steps:
+    - name: Cleanup failed deployments
+      run: |
+        echo "Cleaning up failed deployments..."
+        # Add cleanup logic here

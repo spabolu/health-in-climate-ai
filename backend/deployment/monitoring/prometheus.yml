@@ -1,0 +1,275 @@
+# Prometheus Configuration for HeatGuard Predictive Safety System
+# Complete monitoring setup with custom metrics and alerting
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'heatguard-production'
+    environment: 'production'
+
+rule_files:
+  - "alerts.yml"
+  - "/etc/prometheus/rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+
+  # HeatGuard API monitoring
+  - job_name: 'heatguard-api'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - heatguard
+            - heatguard-staging
+            - heatguard-dev
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: heatguard-api-service
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: http
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_service_name]
+        target_label: service
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node
+    scrape_interval: 15s
+    metrics_path: /api/v1/metrics
+    params:
+      format: ['prometheus']
+
+  # Redis monitoring
+  - job_name: 'redis'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - heatguard
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: redis-service
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: redis
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Nginx Ingress monitoring
+  - job_name: 'nginx-ingress'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - ingress-nginx
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        action: keep
+        regex: ingress-nginx
+      - source_labels: [__meta_kubernetes_pod_container_port_number]
+        action: keep
+        regex: "10254"
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Node Exporter (system metrics)
+  - job_name: 'node-exporter'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - monitoring
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: node-exporter
+    scrape_interval: 30s
+
+  # kube-state-metrics (Kubernetes objects)
+  - job_name: 'kube-state-metrics'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - monitoring
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: kube-state-metrics
+    scrape_interval: 30s
+
+  # cAdvisor (container metrics)
+  - job_name: 'cadvisor'
+    kubernetes_sd_configs:
+      - role: node
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      insecure_skip_verify: true
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+    scrape_interval: 30s
+
+  # API Gateway / Load Balancer metrics (if applicable)
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8080']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Database metrics (if using PostgreSQL)
+  # - job_name: 'postgresql'
+  #   kubernetes_sd_configs:
+  #     - role: endpoints
+  #       namespaces:
+  #         names:
+  #           - heatguard
+  #   relabel_configs:
+  #     - source_labels: [__meta_kubernetes_service_name]
+  #       action: keep
+  #       regex: postgresql-service
+  #   scrape_interval: 30s
+
+  # External service monitoring (health checks)
+  - job_name: 'blackbox-external'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - https://api.heatguard.com/api/v1/health
+          - https://api-staging.heatguard.com/api/v1/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+    scrape_interval: 60s
+
+  # Custom business metrics from HeatGuard API
+  - job_name: 'heatguard-business-metrics'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - heatguard
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: heatguard-api-service
+    scrape_interval: 30s
+    metrics_path: /api/v1/business-metrics
+    params:
+      format: ['prometheus']
+
+# Recording rules for performance optimization
+recording_rules:
+  - name: heatguard.rules
+    rules:
+      # API Request rate (per minute)
+      - record: heatguard:api_request_rate_5m
+        expr: rate(http_requests_total{job="heatguard-api"}[5m]) * 60
+
+      # API Error rate
+      - record: heatguard:api_error_rate_5m
+        expr: rate(http_requests_total{job="heatguard-api",status=~"5.."}[5m]) / rate(http_requests_total{job="heatguard-api"}[5m])
+
+      # API 95th percentile response time
+      - record: heatguard:api_response_time_p95_5m
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="heatguard-api"}[5m]))
+
+      # API 99th percentile response time
+      - record: heatguard:api_response_time_p99_5m
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job="heatguard-api"}[5m]))
+
+      # Prediction requests per minute
+      - record: heatguard:predictions_per_minute_5m
+        expr: rate(heatguard_predictions_total[5m]) * 60
+
+      # High-risk predictions percentage
+      - record: heatguard:high_risk_predictions_percentage_5m
+        expr: rate(heatguard_predictions_total{risk_level="Danger"}[5m]) / rate(heatguard_predictions_total[5m]) * 100
+
+      # Redis connection pool utilization
+      - record: heatguard:redis_connection_utilization
+        expr: redis_connected_clients / redis_config_maxclients * 100
+
+      # Model prediction accuracy (if available)
+      - record: heatguard:model_accuracy_24h
+        expr: avg_over_time(heatguard_model_accuracy[24h])
+
+  # Infrastructure rules
+  - name: infrastructure.rules
+    rules:
+      # CPU utilization by pod
+      - record: pod:cpu_usage_rate_5m
+        expr: rate(container_cpu_usage_seconds_total{container!="POD",container!=""}[5m])
+
+      # Memory utilization by pod
+      - record: pod:memory_usage_bytes
+        expr: container_memory_working_set_bytes{container!="POD",container!=""}
+
+      # Network I/O by pod
+      - record: pod:network_receive_bytes_rate_5m
+        expr: rate(container_network_receive_bytes_total[5m])
+
+      - record: pod:network_transmit_bytes_rate_5m
+        expr: rate(container_network_transmit_bytes_total[5m])
+
+      # Disk I/O by node
+      - record: node:disk_read_bytes_rate_5m
+        expr: rate(node_disk_read_bytes_total[5m])
+
+      - record: node:disk_write_bytes_rate_5m
+        expr: rate(node_disk_written_bytes_total[5m])
+
+# Global configuration
+remote_write:
+  # Send metrics to external monitoring system (optional)
+  # - url: "https://prometheus-remote-write.monitoring.com/api/v1/write"
+  #   basic_auth:
+  #     username: "heatguard"
+  #     password_file: "/etc/prometheus/remote-write-password"
+  #   queue_config:
+  #     max_samples_per_send: 10000
+  #     batch_send_deadline: 5s
+
+remote_read:
+  # Read from external monitoring system (optional)
+  # - url: "https://prometheus-remote-read.monitoring.com/api/v1/read"
+  #   basic_auth:
+  #     username: "heatguard"
+  #     password_file: "/etc/prometheus/remote-read-password"
+
+# Storage configuration
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 50GB
+    wal-compression: true

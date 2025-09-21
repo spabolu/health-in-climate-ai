@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: heatguard
+  labels:
+    name: heatguard
+    app.kubernetes.io/name: heatguard
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: namespace
+    app.kubernetes.io/part-of: heatguard-system
+    environment: production
+  annotations:
+    description: "HeatGuard Predictive Safety System namespace"
+    contact: "heatguard-admin@company.com"
+spec:
+  finalizers:
+  - kubernetes

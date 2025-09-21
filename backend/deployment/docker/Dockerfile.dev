@@ -1,0 +1,74 @@
+# HeatGuard Development Dockerfile
+# Optimized for development with hot reloading and debugging capabilities
+
+FROM python:3.9-slim
+
+LABEL maintainer="HeatGuard Development Team" \
+      version="1.0.0" \
+      description="HeatGuard Development Environment"
+
+# Set environment variables for development
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    ENVIRONMENT=development \
+    DEBUG=true \
+    LOG_LEVEL=debug \
+    RELOAD=true
+
+# Install system dependencies for development
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    vim \
+    htop \
+    procps \
+    net-tools \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create development user
+RUN groupadd -r heatguard && useradd -r -g heatguard -s /bin/bash heatguard
+
+# Set working directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+COPY requirements-dev.txt* ./
+RUN pip install --no-cache-dir -r requirements.txt && \
+    if [ -f requirements-dev.txt ]; then pip install --no-cache-dir -r requirements-dev.txt; fi
+
+# Install additional development tools
+RUN pip install --no-cache-dir \
+    debugpy \
+    ipython \
+    jupyter \
+    black \
+    flake8 \
+    pytest-cov \
+    pre-commit
+
+# Copy application code
+COPY --chown=heatguard:heatguard . .
+
+# Ensure proper permissions
+RUN chown -R heatguard:heatguard /app && \
+    chmod -R 755 /app
+
+# Create logs directory
+RUN mkdir -p /app/logs && chown -R heatguard:heatguard /app/logs
+
+# Switch to development user
+USER heatguard
+
+# Health check for development
+HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+
+# Expose port and debugger port
+EXPOSE 8000 5678
+
+# Development command with hot reloading
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "debug"]

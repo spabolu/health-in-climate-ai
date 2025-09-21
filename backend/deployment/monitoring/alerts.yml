@@ -1,0 +1,423 @@
+# Prometheus Alert Rules for HeatGuard Predictive Safety System
+# Comprehensive alerting for API health, performance, and business metrics
+
+groups:
+  - name: heatguard.api.alerts
+    rules:
+      # API Health Alerts
+      - alert: HeatGuardAPIDown
+        expr: up{job="heatguard-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+          team: heatguard
+        annotations:
+          summary: "HeatGuard API is down"
+          description: "HeatGuard API instance {{ $labels.instance }} has been down for more than 1 minute."
+          runbook_url: "https://docs.heatguard.com/runbooks/api-down"
+          dashboard_url: "https://grafana.heatguard.com/d/heatguard-overview"
+
+      - alert: HeatGuardAPIHighErrorRate
+        expr: heatguard:api_error_rate_5m > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+          team: heatguard
+        annotations:
+          summary: "High API error rate detected"
+          description: "HeatGuard API error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+          runbook_url: "https://docs.heatguard.com/runbooks/high-error-rate"
+
+      - alert: HeatGuardAPIHighResponseTime
+        expr: heatguard:api_response_time_p95_5m > 0.2
+        for: 3m
+        labels:
+          severity: warning
+          component: api
+          team: heatguard
+        annotations:
+          summary: "High API response time"
+          description: "HeatGuard API 95th percentile response time is {{ $value }}s (threshold: 200ms)."
+          runbook_url: "https://docs.heatguard.com/runbooks/high-response-time"
+
+      - alert: HeatGuardAPIVeryHighResponseTime
+        expr: heatguard:api_response_time_p95_5m > 1.0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+          team: heatguard
+        annotations:
+          summary: "Very high API response time"
+          description: "HeatGuard API 95th percentile response time is {{ $value }}s (critical threshold: 1s)."
+          runbook_url: "https://docs.heatguard.com/runbooks/very-high-response-time"
+
+      # Traffic and Rate Limiting
+      - alert: HeatGuardAPILowTraffic
+        expr: heatguard:api_request_rate_5m < 10
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+          team: heatguard
+        annotations:
+          summary: "Unusually low API traffic"
+          description: "HeatGuard API receiving only {{ $value }} requests per minute (expected: >10)."
+          runbook_url: "https://docs.heatguard.com/runbooks/low-traffic"
+
+      - alert: HeatGuardAPIHighTraffic
+        expr: heatguard:api_request_rate_5m > 500
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+          team: heatguard
+        annotations:
+          summary: "High API traffic detected"
+          description: "HeatGuard API receiving {{ $value }} requests per minute (threshold: 500)."
+          runbook_url: "https://docs.heatguard.com/runbooks/high-traffic"
+
+      # Model Performance Alerts
+      - alert: HeatGuardModelLowAccuracy
+        expr: heatguard:model_accuracy_24h < 0.90
+        for: 30m
+        labels:
+          severity: warning
+          component: model
+          team: heatguard-ml
+        annotations:
+          summary: "Model accuracy below threshold"
+          description: "HeatGuard model accuracy is {{ $value | humanizePercentage }} (threshold: 90%)."
+          runbook_url: "https://docs.heatguard.com/runbooks/model-accuracy"
+
+      - alert: HeatGuardHighRiskPredictionsSpike
+        expr: heatguard:high_risk_predictions_percentage_5m > 20
+        for: 10m
+        labels:
+          severity: warning
+          component: model
+          team: heatguard-safety
+        annotations:
+          summary: "Spike in high-risk predictions"
+          description: "{{ $value | humanizePercentage }} of predictions are high-risk (threshold: 20%)."
+          runbook_url: "https://docs.heatguard.com/runbooks/high-risk-spike"
+
+      - alert: HeatGuardModelPredictionStalled
+        expr: rate(heatguard_predictions_total[5m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: model
+          team: heatguard-ml
+        annotations:
+          summary: "Model predictions have stalled"
+          description: "No predictions processed in the last 5 minutes."
+          runbook_url: "https://docs.heatguard.com/runbooks/predictions-stalled"
+
+  - name: heatguard.infrastructure.alerts
+    rules:
+      # Redis Alerts
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: redis
+          team: heatguard
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} is down."
+          runbook_url: "https://docs.heatguard.com/runbooks/redis-down"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+          team: heatguard
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}."
+          runbook_url: "https://docs.heatguard.com/runbooks/redis-memory"
+
+      - alert: RedisConnectionPoolExhaustion
+        expr: heatguard:redis_connection_utilization > 90
+        for: 3m
+        labels:
+          severity: critical
+          component: redis
+          team: heatguard
+        annotations:
+          summary: "Redis connection pool nearly exhausted"
+          description: "Redis connection pool utilization is {{ $value }}%."
+          runbook_url: "https://docs.heatguard.com/runbooks/redis-connections"
+
+      # Kubernetes Pod Alerts
+      - alert: HeatGuardPodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total{namespace="heatguard"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: kubernetes
+          team: heatguard
+        annotations:
+          summary: "Pod crash looping"
+          description: "Pod {{ $labels.pod }} is crash looping."
+          runbook_url: "https://docs.heatguard.com/runbooks/pod-crash-loop"
+
+      - alert: HeatGuardPodHighCPU
+        expr: pod:cpu_usage_rate_5m{namespace="heatguard"} > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: kubernetes
+          team: heatguard
+        annotations:
+          summary: "High CPU usage in pod"
+          description: "Pod {{ $labels.pod }} CPU usage is {{ $value | humanizePercentage }}."
+          runbook_url: "https://docs.heatguard.com/runbooks/high-cpu"
+
+      - alert: HeatGuardPodHighMemory
+        expr: pod:memory_usage_bytes{namespace="heatguard"} / (1024^3) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: kubernetes
+          team: heatguard
+        annotations:
+          summary: "High memory usage in pod"
+          description: "Pod {{ $labels.pod }} memory usage is {{ $value }}GB."
+          runbook_url: "https://docs.heatguard.com/runbooks/high-memory"
+
+      - alert: HeatGuardPodNotReady
+        expr: kube_pod_status_ready{condition="false", namespace="heatguard"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          component: kubernetes
+          team: heatguard
+        annotations:
+          summary: "Pod not ready"
+          description: "Pod {{ $labels.pod }} has been not ready for more than 5 minutes."
+          runbook_url: "https://docs.heatguard.com/runbooks/pod-not-ready"
+
+      # Node-level Alerts
+      - alert: NodeHighCPU
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: node
+          team: infrastructure
+        annotations:
+          summary: "High CPU usage on node"
+          description: "Node {{ $labels.instance }} CPU usage is {{ $value }}%."
+          runbook_url: "https://docs.heatguard.com/runbooks/node-high-cpu"
+
+      - alert: NodeHighMemory
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 10m
+        labels:
+          severity: critical
+          component: node
+          team: infrastructure
+        annotations:
+          summary: "High memory usage on node"
+          description: "Node {{ $labels.instance }} memory usage is {{ $value | humanizePercentage }}."
+          runbook_url: "https://docs.heatguard.com/runbooks/node-high-memory"
+
+      - alert: NodeDiskSpaceLow
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+          component: node
+          team: infrastructure
+        annotations:
+          summary: "Low disk space on node"
+          description: "Node {{ $labels.instance }} disk space is {{ $value }}% available."
+          runbook_url: "https://docs.heatguard.com/runbooks/low-disk-space"
+
+      - alert: NodeDiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) * 100 < 5
+        for: 1m
+        labels:
+          severity: critical
+          component: node
+          team: infrastructure
+        annotations:
+          summary: "Critical disk space on node"
+          description: "Node {{ $labels.instance }} disk space is {{ $value }}% available."
+          runbook_url: "https://docs.heatguard.com/runbooks/critical-disk-space"
+
+  - name: heatguard.business.alerts
+    rules:
+      # Business Logic Alerts
+      - alert: HeatGuardCriticalRiskNotProcessed
+        expr: increase(heatguard_critical_risk_alerts_total[1h]) == 0 AND increase(heatguard_predictions_total{risk_level="Danger"}[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: safety
+          team: heatguard-safety
+        annotations:
+          summary: "Critical risk predictions not generating alerts"
+          description: "Critical risk predictions detected but no safety alerts generated in the last hour."
+          runbook_url: "https://docs.heatguard.com/runbooks/critical-risk-alerts"
+
+      - alert: HeatGuardOSHAComplianceGap
+        expr: increase(heatguard_osha_compliance_logs_total[1h]) < increase(heatguard_predictions_total[1h]) * 0.95
+        for: 30m
+        labels:
+          severity: warning
+          component: compliance
+          team: heatguard-compliance
+        annotations:
+          summary: "OSHA compliance logging gap detected"
+          description: "Less than 95% of predictions are being logged for OSHA compliance."
+          runbook_url: "https://docs.heatguard.com/runbooks/osha-compliance"
+
+      - alert: HeatGuardAPIKeyUsageSpike
+        expr: rate(heatguard_api_requests_by_key[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+          team: heatguard-security
+        annotations:
+          summary: "Unusual API key usage pattern"
+          description: "API key {{ $labels.api_key_id }} is being used at {{ $value }} requests/minute."
+          runbook_url: "https://docs.heatguard.com/runbooks/api-key-abuse"
+
+      # Data Quality Alerts
+      - alert: HeatGuardDataQualityLow
+        expr: avg_over_time(heatguard_data_quality_score[15m]) < 0.8
+        for: 15m
+        labels:
+          severity: warning
+          component: data-quality
+          team: heatguard-ml
+        annotations:
+          summary: "Low data quality score"
+          description: "Average data quality score is {{ $value | humanizePercentage }} over 15 minutes."
+          runbook_url: "https://docs.heatguard.com/runbooks/data-quality"
+
+      - alert: HeatGuardMissingFeatures
+        expr: rate(heatguard_missing_features_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: data-quality
+          team: heatguard-ml
+        annotations:
+          summary: "High rate of missing features in predictions"
+          description: "{{ $value }} predictions per minute have missing required features."
+          runbook_url: "https://docs.heatguard.com/runbooks/missing-features"
+
+  - name: heatguard.security.alerts
+    rules:
+      # Security Alerts
+      - alert: HeatGuardUnauthorizedAccess
+        expr: rate(http_requests_total{status="401"}[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          component: security
+          team: heatguard-security
+        annotations:
+          summary: "High rate of unauthorized access attempts"
+          description: "{{ $value }} unauthorized requests per minute detected."
+          runbook_url: "https://docs.heatguard.com/runbooks/unauthorized-access"
+
+      - alert: HeatGuardRateLimitExceeded
+        expr: rate(http_requests_total{status="429"}[5m]) > 10
+        for: 3m
+        labels:
+          severity: warning
+          component: security
+          team: heatguard-security
+        annotations:
+          summary: "High rate of rate-limited requests"
+          description: "{{ $value }} rate-limited requests per minute."
+          runbook_url: "https://docs.heatguard.com/runbooks/rate-limit"
+
+      - alert: HeatGuardSuspiciousTraffic
+        expr: rate(http_requests_total[1m]) > 1000
+        for: 1m
+        labels:
+          severity: critical
+          component: security
+          team: heatguard-security
+        annotations:
+          summary: "Potential DDoS attack detected"
+          description: "{{ $value }} requests per minute - potential attack in progress."
+          runbook_url: "https://docs.heatguard.com/runbooks/ddos-attack"
+
+  - name: heatguard.external.alerts
+    rules:
+      # External Service Monitoring
+      - alert: HeatGuardExternalAPIDown
+        expr: probe_success{job="blackbox-external"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: external
+          team: heatguard
+        annotations:
+          summary: "External HeatGuard API endpoint is down"
+          description: "External endpoint {{ $labels.instance }} is not responding to health checks."
+          runbook_url: "https://docs.heatguard.com/runbooks/external-api-down"
+
+      - alert: HeatGuardExternalAPISlowResponse
+        expr: probe_duration_seconds{job="blackbox-external"} > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: external
+          team: heatguard
+        annotations:
+          summary: "External HeatGuard API responding slowly"
+          description: "External endpoint {{ $labels.instance }} response time is {{ $value }}s."
+          runbook_url: "https://docs.heatguard.com/runbooks/external-api-slow"
+
+      - alert: HeatGuardCertificateExpiring
+        expr: probe_ssl_earliest_cert_expiry{job="blackbox-external"} - time() < 86400 * 7
+        for: 1h
+        labels:
+          severity: warning
+          component: security
+          team: infrastructure
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}."
+          runbook_url: "https://docs.heatguard.com/runbooks/ssl-certificate"
+
+  - name: heatguard.synthetic.alerts
+    rules:
+      # Synthetic Transaction Alerts
+      - alert: HeatGuardSyntheticTestFailing
+        expr: synthetic_test_success{service="heatguard"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          component: synthetic
+          team: heatguard
+        annotations:
+          summary: "Synthetic test failing"
+          description: "Synthetic test {{ $labels.test_name }} has been failing for 3 minutes."
+          runbook_url: "https://docs.heatguard.com/runbooks/synthetic-test-failure"
+
+      - alert: HeatGuardE2ETestSlowResponse
+        expr: synthetic_test_duration_seconds{service="heatguard"} > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: synthetic
+          team: heatguard
+        annotations:
+          summary: "End-to-end test responding slowly"
+          description: "E2E test {{ $labels.test_name }} taking {{ $value }}s (threshold: 10s)."
+          runbook_url: "https://docs.heatguard.com/runbooks/e2e-slow-response"

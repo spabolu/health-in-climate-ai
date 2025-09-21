@@ -1,0 +1,168 @@
+version: '3.8'
+
+services:
+  # HeatGuard API Service
+  heatguard-api:
+    build:
+      context: ../../
+      dockerfile: deployment/docker/Dockerfile.dev
+    container_name: heatguard-api
+    ports:
+      - "8000:8000"
+      - "5678:5678"  # Debug port
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=debug
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - CORS_ORIGINS=["http://localhost:3000", "http://localhost:8080"]
+    volumes:
+      - ../../:/app:cached
+      - /app/__pycache__  # Exclude pycache from volume mount
+      - /app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - heatguard-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: heatguard-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    restart: unless-stopped
+    networks:
+      - heatguard-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: heatguard-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - heatguard-network
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: heatguard-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=heatguard123
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../monitoring/grafana-dashboard.json:/var/lib/grafana/dashboards/heatguard.json
+      - ../monitoring/grafana-provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - heatguard-network
+
+  # PostgreSQL for optional data persistence (uncomment if needed)
+  # postgres:
+  #   image: postgres:14-alpine
+  #   container_name: heatguard-postgres
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     - POSTGRES_DB=heatguard
+  #     - POSTGRES_USER=heatguard
+  #     - POSTGRES_PASSWORD=heatguard123
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - heatguard-network
+
+  # Nginx reverse proxy and load balancer
+  nginx:
+    image: nginx:alpine
+    container_name: heatguard-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl  # SSL certificates directory
+    depends_on:
+      - heatguard-api
+    restart: unless-stopped
+    networks:
+      - heatguard-network
+
+  # ELK Stack for logging (optional)
+  # elasticsearch:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.5.0
+  #   container_name: heatguard-elasticsearch
+  #   environment:
+  #     - discovery.type=single-node
+  #     - xpack.security.enabled=false
+  #   ports:
+  #     - "9200:9200"
+  #   volumes:
+  #     - elasticsearch_data:/usr/share/elasticsearch/data
+  #   networks:
+  #     - heatguard-network
+
+  # kibana:
+  #   image: docker.elastic.co/kibana/kibana:8.5.0
+  #   container_name: heatguard-kibana
+  #   ports:
+  #     - "5601:5601"
+  #   depends_on:
+  #     - elasticsearch
+  #   environment:
+  #     - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+  #   networks:
+  #     - heatguard-network
+
+networks:
+  heatguard-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  # postgres_data:
+  #   driver: local
+  # elasticsearch_data:
+  #   driver: local

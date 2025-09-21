@@ -1,0 +1,481 @@
+# GitLab CI/CD Pipeline for HeatGuard Predictive Safety System
+# Comprehensive pipeline for testing, building, and deploying
+
+stages:
+  - validate
+  - test
+  - security
+  - build
+  - deploy-dev
+  - deploy-staging
+  - deploy-production
+  - performance
+  - release
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  REGISTRY: $CI_REGISTRY
+  IMAGE_NAME: $CI_REGISTRY_IMAGE/heatguard-api
+  PYTHON_VERSION: "3.9"
+  KUBECONFIG: /etc/kubeconfig
+
+# Templates for reusable job configurations
+.docker_template: &docker_template
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+.kubectl_template: &kubectl_template
+  image: bitnami/kubectl:latest
+  before_script:
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_CONTENT" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+
+.python_template: &python_template
+  image: python:$PYTHON_VERSION
+  before_script:
+    - cd backend
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+
+# Validation Stage
+validate-code:
+  stage: validate
+  <<: *python_template
+  script:
+    - pip install black flake8 mypy bandit
+    - black --check --diff .
+    - flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+    - mypy app/ --ignore-missing-imports
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+validate-yaml:
+  stage: validate
+  image: cytopia/yamllint:latest
+  script:
+    - yamllint deployment/kubernetes/
+    - yamllint .gitlab-ci.yml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+validate-dockerfile:
+  stage: validate
+  image: hadolint/hadolint:latest-debian
+  script:
+    - hadolint deployment/docker/Dockerfile
+    - hadolint deployment/docker/Dockerfile.dev
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Testing Stage
+unit-tests:
+  stage: test
+  <<: *python_template
+  services:
+    - redis:7-alpine
+  variables:
+    REDIS_URL: "redis://redis:6379/0"
+    DEBUG: "true"
+  script:
+    - pip install pytest pytest-asyncio pytest-mock pytest-cov
+    - pytest tests/ -v --cov=app --cov-report=xml --cov-report=html --cov-report=term
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: backend/coverage.xml
+    paths:
+      - backend/htmlcov/
+    expire_in: 30 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+integration-tests:
+  stage: test
+  <<: *python_template
+  services:
+    - redis:7-alpine
+  variables:
+    REDIS_URL: "redis://redis:6379/0"
+  script:
+    - pip install pytest pytest-asyncio httpx
+    - python demo_api_server.py &
+    - sleep 10
+    - pytest tests/integration/ -v
+  artifacts:
+    reports:
+      junit: backend/integration-test-results.xml
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+load-tests:
+  stage: test
+  image: grafana/k6:latest
+  script:
+    - cd backend/tests
+    - k6 run --out json=../load-test-results.json load-test.js
+  artifacts:
+    paths:
+      - backend/load-test-results.json
+    expire_in: 7 days
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Security Stage
+security-scan:
+  stage: security
+  <<: *python_template
+  script:
+    - pip install bandit safety
+    - bandit -r app/ -f json -o bandit-report.json
+    - safety check --json --output safety-report.json
+  artifacts:
+    paths:
+      - backend/bandit-report.json
+      - backend/safety-report.json
+    reports:
+      sast: backend/bandit-report.json
+    expire_in: 30 days
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+dependency-scan:
+  stage: security
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - |
+      # OWASP Dependency Check
+      curl -L https://github.com/jeremylong/DependencyCheck/releases/download/v8.4.0/dependency-check-8.4.0-release.zip -o dependency-check.zip
+      unzip dependency-check.zip
+      ./dependency-check/bin/dependency-check.sh --project "HeatGuard" --scan backend/requirements.txt --format JSON --out dependency-check-report.json
+  artifacts:
+    paths:
+      - dependency-check-report.json
+    expire_in: 30 days
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - when: manual
+
+# Build Stage
+build-image:
+  stage: build
+  <<: *docker_template
+  script:
+    - cd backend
+    - |
+      docker build \
+        -f deployment/docker/Dockerfile \
+        -t $IMAGE_NAME:$CI_COMMIT_SHA \
+        -t $IMAGE_NAME:$CI_COMMIT_REF_SLUG \
+        --build-arg VERSION=$CI_COMMIT_SHA \
+        --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+        .
+    - docker push $IMAGE_NAME:$CI_COMMIT_SHA
+    - docker push $IMAGE_NAME:$CI_COMMIT_REF_SLUG
+    - |
+      if [ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]; then
+        docker tag $IMAGE_NAME:$CI_COMMIT_SHA $IMAGE_NAME:latest
+        docker push $IMAGE_NAME:latest
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+container-security-scan:
+  stage: build
+  image: aquasec/trivy:latest
+  needs: ["build-image"]
+  script:
+    - trivy image --format template --template "@contrib/sarif.tpl" -o trivy-report.sarif $IMAGE_NAME:$CI_COMMIT_SHA
+    - trivy image --format table $IMAGE_NAME:$CI_COMMIT_SHA
+  artifacts:
+    paths:
+      - trivy-report.sarif
+    reports:
+      sast: trivy-report.sarif
+    expire_in: 30 days
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Development Deployment
+deploy-dev:
+  stage: deploy-dev
+  <<: *kubectl_template
+  environment:
+    name: development
+    url: https://api-dev.heatguard.com
+  variables:
+    KUBECONFIG_CONTENT: $DEV_KUBECONFIG
+    NAMESPACE: heatguard-dev
+  needs: ["build-image"]
+  script:
+    - cd backend/deployment/kubernetes
+    - |
+      # Update image tag
+      sed -i "s|image: heatguard/api:.*|image: $IMAGE_NAME:$CI_COMMIT_SHA|g" deployment.yaml
+      sed -i "s|namespace: heatguard|namespace: $NAMESPACE|g" *.yaml
+    - kubectl apply -f namespace.yaml
+    - kubectl apply -f configmap.yaml
+    - kubectl apply -f secrets.yaml -n $NAMESPACE
+    - kubectl apply -f volumes.yaml
+    - kubectl apply -f deployment.yaml
+    - kubectl apply -f service.yaml
+    - kubectl apply -f ingress.yaml
+    - kubectl wait --for=condition=available --timeout=300s deployment/heatguard-api -n $NAMESPACE
+    - |
+      # Health check
+      sleep 30
+      kubectl port-forward service/heatguard-api-service 8080:8000 -n $NAMESPACE &
+      sleep 5
+      curl -f http://localhost:8080/api/v1/health
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Staging Deployment
+deploy-staging:
+  stage: deploy-staging
+  <<: *kubectl_template
+  environment:
+    name: staging
+    url: https://api-staging.heatguard.com
+  variables:
+    KUBECONFIG_CONTENT: $STAGING_KUBECONFIG
+    NAMESPACE: heatguard-staging
+  needs: ["deploy-dev"]
+  script:
+    - cd backend/deployment/kubernetes
+    - |
+      # Update configurations for staging
+      sed -i "s|image: heatguard/api:.*|image: $IMAGE_NAME:$CI_COMMIT_SHA|g" deployment.yaml
+      sed -i "s|namespace: heatguard|namespace: $NAMESPACE|g" *.yaml
+      sed -i "s|replicas: 3|replicas: 2|g" deployment.yaml  # Fewer replicas in staging
+    - kubectl apply -f namespace.yaml
+    - kubectl apply -f configmap.yaml
+    - kubectl apply -f secrets.yaml -n $NAMESPACE
+    - kubectl apply -f volumes.yaml
+    - kubectl apply -f deployment.yaml
+    - kubectl apply -f service.yaml
+    - kubectl apply -f ingress.yaml
+    - kubectl wait --for=condition=available --timeout=300s deployment/heatguard-api -n $NAMESPACE
+    - |
+      # Comprehensive testing
+      sleep 30
+      curl -f https://api-staging.heatguard.com/api/v1/health
+      cd ../../../tests
+      python integration_tests.py --environment=staging
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Production Deployment (Manual)
+deploy-production:
+  stage: deploy-production
+  <<: *kubectl_template
+  environment:
+    name: production
+    url: https://api.heatguard.com
+  variables:
+    KUBECONFIG_CONTENT: $PROD_KUBECONFIG
+    NAMESPACE: heatguard
+  needs: ["deploy-staging"]
+  script:
+    - cd backend/deployment/kubernetes
+    - |
+      # Blue-Green deployment strategy
+      export GREEN_TAG="green-$CI_COMMIT_SHA"
+
+      # Create green deployment
+      sed -i "s|name: heatguard-api|name: heatguard-api-green|g" deployment.yaml
+      sed -i "s|image: heatguard/api:.*|image: $IMAGE_NAME:$CI_COMMIT_SHA|g" deployment.yaml
+      sed -i "s|app.kubernetes.io/name: heatguard-api|app.kubernetes.io/name: heatguard-api-green|g" deployment.yaml
+
+      kubectl apply -f deployment.yaml
+      kubectl wait --for=condition=available --timeout=600s deployment/heatguard-api-green -n $NAMESPACE
+
+      # Health check green deployment
+      kubectl port-forward deployment/heatguard-api-green 8080:8000 -n $NAMESPACE &
+      sleep 10
+      curl -f http://localhost:8080/api/v1/health
+
+      # Switch traffic to green
+      kubectl patch service heatguard-api-service -n $NAMESPACE -p '{"spec":{"selector":{"app.kubernetes.io/name":"heatguard-api-green"}}}'
+
+      # Verify production
+      sleep 30
+      curl -f https://api.heatguard.com/api/v1/health
+
+      # Run production tests
+      cd ../../../tests
+      python production_smoke_tests.py
+
+      # Clean up old deployment
+      kubectl delete deployment heatguard-api -n $NAMESPACE || true
+      kubectl label deployment heatguard-api-green app.kubernetes.io/name=heatguard-api -n $NAMESPACE --overwrite
+  when: manual
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Performance Monitoring
+performance-monitoring:
+  stage: performance
+  image: python:$PYTHON_VERSION
+  needs: ["deploy-production"]
+  script:
+    - cd backend/tests
+    - pip install requests matplotlib numpy
+    - python performance_benchmarks.py --environment=production
+    - |
+      # Send metrics to monitoring system
+      curl -X POST "$METRICS_ENDPOINT" \
+        -H "Authorization: Bearer $METRICS_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d @performance-results.json
+  artifacts:
+    paths:
+      - backend/tests/performance-results.json
+      - backend/tests/performance-charts/
+    expire_in: 7 days
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - when: manual
+
+# Release Management
+create-release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs: ["deploy-production"]
+  script:
+    - |
+      # Generate changelog
+      git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD > changelog.md
+  release:
+    name: 'HeatGuard Release $CI_COMMIT_TAG'
+    description: 'changelog.md'
+    tag_name: '$CI_COMMIT_TAG'
+    assets:
+      links:
+        - name: 'API Documentation'
+          url: 'https://api.heatguard.com/docs'
+        - name: 'Deployment Guide'
+          url: '${CI_PROJECT_URL}/-/blob/${CI_COMMIT_TAG}/backend/docs/DEPLOYMENT.md'
+        - name: 'Container Image'
+          url: '${IMAGE_NAME}:${CI_COMMIT_TAG}'
+  rules:
+    - if: $CI_COMMIT_TAG
+
+# Monitoring and Alerts
+monitoring-setup:
+  stage: release
+  <<: *kubectl_template
+  variables:
+    KUBECONFIG_CONTENT: $PROD_KUBECONFIG
+  script:
+    - cd backend/deployment/monitoring
+    - kubectl apply -f prometheus.yml
+    - kubectl apply -f grafana-dashboard.json
+    - kubectl apply -f alerts.yml
+    - echo "Monitoring and alerting configured"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - when: manual
+
+# Cleanup Jobs
+cleanup-failed-deployments:
+  stage: .post
+  <<: *kubectl_template
+  variables:
+    KUBECONFIG_CONTENT: $PROD_KUBECONFIG
+  script:
+    - |
+      # Clean up failed deployments
+      kubectl delete deployment -l "app.kubernetes.io/name=heatguard-api-green" -n heatguard || true
+      kubectl delete pods --field-selector=status.phase=Failed -n heatguard || true
+  when: on_failure
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+cleanup-old-images:
+  stage: .post
+  <<: *docker_template
+  script:
+    - |
+      # Clean up old container images (keep last 10)
+      IMAGE_TAGS=$(docker images --format "table {{.Repository}}:{{.Tag}}" | grep $IMAGE_NAME | tail -n +11)
+      if [ ! -z "$IMAGE_TAGS" ]; then
+        echo "$IMAGE_TAGS" | xargs -r docker rmi
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# Scheduled Jobs
+security-scan-scheduled:
+  extends: security-scan
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_JOB == "security"
+
+dependency-update:
+  stage: validate
+  image: python:$PYTHON_VERSION
+  script:
+    - cd backend
+    - pip install pip-review
+    - pip-review --auto
+    - |
+      if [ -n "$(git status --porcelain)" ]; then
+        git config user.email "ci@heatguard.com"
+        git config user.name "HeatGuard CI"
+        git add requirements.txt
+        git commit -m "chore: update dependencies [skip ci]"
+        git push origin $CI_COMMIT_BRANCH
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULED_JOB == "dependencies"
+
+# Pipeline success notification
+notify-success:
+  stage: .post
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      curl -X POST "$SLACK_WEBHOOK_URL" \
+        -H 'Content-type: application/json' \
+        --data "{\"text\":\"✅ HeatGuard deployment successful: $CI_COMMIT_BRANCH -> $CI_ENVIRONMENT_NAME\"}"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+
+# Pipeline failure notification
+notify-failure:
+  stage: .post
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      curl -X POST "$SLACK_WEBHOOK_URL" \
+        -H 'Content-type: application/json' \
+        --data "{\"text\":\"❌ HeatGuard pipeline failed: $CI_COMMIT_BRANCH - $CI_PIPELINE_URL\"}"
+  when: on_failure
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

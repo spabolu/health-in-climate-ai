@@ -1,0 +1,283 @@
+# Persistent Volume Claims for HeatGuard
+# Storage for model files, cache data, and logs
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-storage-pvc
+  namespace: heatguard
+  labels:
+    app.kubernetes.io/name: heatguard
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  accessModes:
+  - ReadOnlyMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: fast-ssd  # Use fast SSD storage class
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data-pvc
+  namespace: heatguard
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/version: "7.0"
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fast-ssd
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: logs-pvc
+  namespace: heatguard
+  labels:
+    app.kubernetes.io/name: heatguard
+    app.kubernetes.io/component: logs
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard  # Standard storage for logs
+  volumeMode: Filesystem
+
+---
+# Storage Class definitions (create if not exists)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+  labels:
+    app.kubernetes.io/name: heatguard
+    app.kubernetes.io/component: storage-class
+provisioner: kubernetes.io/aws-ebs  # Change based on cloud provider
+parameters:
+  type: gp3  # AWS GP3 SSD
+  fsType: ext4
+  encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+
+---
+# For GCP GKE
+# apiVersion: storage.k8s.io/v1
+# kind: StorageClass
+# metadata:
+#   name: fast-ssd
+# provisioner: kubernetes.io/gce-pd
+# parameters:
+#   type: pd-ssd
+#   replication-type: none
+# volumeBindingMode: WaitForFirstConsumer
+# allowVolumeExpansion: true
+
+---
+# For Azure AKS
+# apiVersion: storage.k8s.io/v1
+# kind: StorageClass
+# metadata:
+#   name: fast-ssd
+# provisioner: kubernetes.io/azure-disk
+# parameters:
+#   skuName: Premium_LRS
+#   kind: Managed
+# volumeBindingMode: WaitForFirstConsumer
+# allowVolumeExpansion: true
+
+---
+# Job to initialize model storage
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-init-job
+  namespace: heatguard
+  labels:
+    app.kubernetes.io/name: heatguard
+    app.kubernetes.io/component: init-job
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: model-init-job
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: model-downloader
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Initializing model storage..."
+          # Create necessary directories
+          mkdir -p /models/thermal_comfort_model
+
+          # Download model files (replace with actual model download logic)
+          echo "Model files would be downloaded here from S3, GCS, or Azure Blob"
+          echo "For now, creating placeholder files..."
+
+          touch /models/thermal_comfort_model/model.joblib
+          touch /models/thermal_comfort_model/scaler.joblib
+          touch /models/thermal_comfort_model/feature_names.json
+
+          echo "Model initialization completed"
+
+          # Set proper permissions
+          chmod -R 755 /models
+
+        volumeMounts:
+        - name: model-storage
+          mountPath: /models
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: model-storage-pvc
+  backoffLimit: 3
+  completions: 1
+  parallelism: 1
+
+---
+# ConfigMap for model initialization script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-init-script
+  namespace: heatguard
+data:
+  init.sh: |
+    #!/bin/bash
+    set -e
+
+    echo "Starting model initialization..."
+
+    # Create model directory structure
+    mkdir -p /models/thermal_comfort_model
+
+    # Download models from cloud storage
+    # Example for AWS S3:
+    # aws s3 sync s3://heatguard-models/production /models/thermal_comfort_model/
+
+    # Example for Google Cloud Storage:
+    # gsutil -m rsync -r gs://heatguard-models/production /models/thermal_comfort_model/
+
+    # Example for Azure Blob Storage:
+    # az storage blob download-batch --source models --destination /models/thermal_comfort_model/
+
+    # Verify model files exist
+    required_files=(
+        "model.joblib"
+        "scaler.joblib"
+        "feature_names.json"
+    )
+
+    for file in "${required_files[@]}"; do
+        if [[ ! -f "/models/thermal_comfort_model/$file" ]]; then
+            echo "Error: Required model file $file not found"
+            exit 1
+        fi
+        echo "✓ Found $file"
+    done
+
+    # Set proper permissions
+    chmod -R 755 /models
+
+    echo "Model initialization completed successfully"
+
+---
+# Backup Job for Redis data (optional)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: redis-backup
+  namespace: heatguard
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: backup
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: redis-backup
+            image: redis:7-alpine
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting Redis backup..."
+              redis-cli -h redis-service -p 6379 BGSAVE
+              sleep 10
+
+              # Wait for backup to complete
+              while [ $(redis-cli -h redis-service -p 6379 LASTSAVE) -eq $(redis-cli -h redis-service -p 6379 LASTSAVE) ]; do
+                sleep 5
+              done
+
+              # Copy backup file with timestamp
+              timestamp=$(date +%Y%m%d_%H%M%S)
+              cp /data/dump.rdb /backup/redis_backup_$timestamp.rdb
+
+              # Clean up old backups (keep last 7 days)
+              find /backup -name "redis_backup_*.rdb" -mtime +7 -delete
+
+              echo "Redis backup completed: redis_backup_$timestamp.rdb"
+
+            volumeMounts:
+            - name: redis-data
+              mountPath: /data
+              readOnly: true
+            - name: backup-storage
+              mountPath: /backup
+
+          volumes:
+          - name: redis-data
+            persistentVolumeClaim:
+              claimName: redis-data-pvc
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: redis-backup-pvc
+
+          restartPolicy: OnFailure
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+
+---
+# PVC for Redis backups
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-backup-pvc
+  namespace: heatguard
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: backup-storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: standard
+  volumeMode: Filesystem
