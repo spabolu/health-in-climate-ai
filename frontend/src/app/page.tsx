@@ -1,6 +1,9 @@
-import { redirect } from 'next/navigation';
+import { AegisDashboard } from '@/components/dashboard/aegis-dashboard-v2'
 
 export default function Home() {
-  // Redirect to dashboard as this is the main entry point for HeatGuard Pro
-  redirect('/dashboard');
+  return (
+    <main className="min-h-screen bg-background">
+      <AegisDashboard />
+    </main>
+  );
 }

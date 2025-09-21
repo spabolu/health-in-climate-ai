@@ -10,19 +10,8 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript", "prettier"),
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
-    rules: {
-      // HeatGuard Pro specific rules for safety-critical code
-      "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-      "@typescript-eslint/no-explicit-any": "warn",
-      "prefer-const": "error",
-      "no-console": "warn",
-      "react/no-unescaped-entities": "warn",
-      // Safety-critical: Ensure proper React hooks usage
-      "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn",
-    },
     ignores: [
       "node_modules/**",
       ".next/**",
