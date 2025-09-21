@@ -22,7 +22,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { BiometricData } from '@/types/thermal-comfort';
 import {
   Heart,
   Thermometer,
@@ -336,7 +335,9 @@ export default function BiometricTrendsChart({
             >
               <Checkbox checked={metric.enabled} readOnly />
               <div className="flex items-center space-x-2">
-                <Icon className="h-4 w-4" style={{ color: metric.color }} />
+                <div style={{ color: metric.color }}>
+                  <Icon className="h-4 w-4" />
+                </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900">{metric.label}</p>
                   {stat && (

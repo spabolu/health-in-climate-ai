@@ -114,8 +114,11 @@ class ThermalComfortPredictor:
         features_df = pd.DataFrame([features_dict])
         features_df = features_df[self.feature_columns]  # Ensure correct order
         
-        # Handle missing values
-        features_df = features_df.fillna(features_df.mean())
+        # Handle missing values safely
+        numeric_cols = features_df.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) > 0:
+            features_df[numeric_cols] = features_df[numeric_cols].fillna(features_df[numeric_cols].mean())
+        features_df = features_df.fillna(0)
         
         # Scale features
         features_scaled = self.scaler.transform(features_df)

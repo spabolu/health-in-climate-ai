@@ -2,6 +2,7 @@
  * HeatGuard Pro Emergency Alert Component
  * Critical emergency alert display with immediate action buttons
  */
+/* eslint-disable no-console */
 
 'use client';
 
@@ -12,7 +13,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,

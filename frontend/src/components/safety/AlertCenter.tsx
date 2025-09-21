@@ -28,10 +28,8 @@ import {
   CheckCircle,
   Archive,
   Bell,
-  BellOff,
   RefreshCw,
   Download,
-  Trash2,
 } from 'lucide-react';
 
 interface AlertCenterProps {
@@ -66,7 +64,6 @@ export default function AlertCenter({
   className = '',
 }: AlertCenterProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<AlertFilter>('all');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [sortField, setSortField] = useState<SortField>('timestamp');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -89,20 +86,7 @@ export default function AlertCenter({
     }
 
     // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(alert => {
-        switch (statusFilter) {
-          case 'unacknowledged':
-            return !alert.acknowledged && !alert.resolved;
-          case 'acknowledged':
-            return alert.acknowledged && !alert.resolved;
-          case 'resolved':
-            return alert.resolved;
-          default:
-            return true;
-        }
-      });
-    }
+    // Note: statusFilter is hardcoded to 'all' - no filtering needed
 
     // Apply severity filter
     if (severityFilter !== 'all') {
@@ -137,7 +121,7 @@ export default function AlertCenter({
     });
 
     return filtered;
-  }, [alerts, searchTerm, statusFilter, severityFilter, sortField, sortDirection]);
+  }, [alerts, searchTerm, severityFilter, sortField, sortDirection]);
 
   // Group alerts by status for tabs
   const alertsByStatus = useMemo(() => {
@@ -328,7 +312,7 @@ export default function AlertCenter({
       )}
 
       {/* Alert Tabs */}
-      <Tabs value={activeTab} onValueChange={(value: AlertFilter) => setActiveTab(value)}>
+      <Tabs value={activeTab} onValueChange={(value: string) => setActiveTab(value as AlertFilter)}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="unacknowledged" className="relative">
             Unacknowledged

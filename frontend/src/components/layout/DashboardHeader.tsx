@@ -128,7 +128,7 @@ export default function DashboardHeader() {
               <Card className="p-2 bg-gray-50">
                 <div className="flex items-center space-x-2 text-sm">
                   <Users className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium">{metrics.active_workers}/{metrics.total_workers}</span>
+                  <span className="font-medium">{metrics.active_workers ?? 0}/{metrics.total_workers ?? 0}</span>
                   <span className="text-gray-600">Active</span>
                 </div>
               </Card>
@@ -136,16 +136,16 @@ export default function DashboardHeader() {
               <Card className="p-2 bg-gray-50">
                 <div className="flex items-center space-x-2 text-sm">
                   <Thermometer className="h-4 w-4 text-orange-600" />
-                  <span className="font-medium">{metrics.average_temperature.toFixed(1)}°C</span>
+                  <span className="font-medium">{metrics.average_temperature?.toFixed(1) ?? '--'}°C</span>
                   <span className="text-gray-600">Avg Temp</span>
                 </div>
               </Card>
 
-              {metrics.workers_at_risk > 0 && (
+              {(metrics.workers_at_risk ?? 0) > 0 && (
                 <Card className="p-2 bg-yellow-50 border-yellow-200">
                   <div className="flex items-center space-x-2 text-sm">
                     <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                    <span className="font-medium text-yellow-800">{metrics.workers_at_risk}</span>
+                    <span className="font-medium text-yellow-800">{metrics.workers_at_risk ?? 0}</span>
                     <span className="text-yellow-700">At Risk</span>
                   </div>
                 </Card>

@@ -26,7 +26,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Thermometer,
   Droplets,
-  Wind,
   Sun,
   AlertTriangle,
   Download,

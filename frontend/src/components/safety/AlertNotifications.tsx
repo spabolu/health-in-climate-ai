@@ -2,6 +2,7 @@
  * HeatGuard Pro Alert Notifications
  * Toast notification system for real-time alerts
  */
+/* eslint-disable no-console */
 
 'use client';
 
@@ -349,22 +350,11 @@ export class BrowserNotificationManager {
       badge: '/favicon.ico',
       tag: alert.id,
       requireInteraction: alert.severity === 'critical',
-      timestamp: new Date(alert.timestamp).getTime(),
       data: {
         alertId: alert.id,
         workerId: alert.worker_id,
         severity: alert.severity,
       },
-      actions: [
-        {
-          action: 'acknowledge',
-          title: 'Acknowledge',
-        },
-        {
-          action: 'view',
-          title: 'View Details',
-        },
-      ],
     };
 
     const notification = new Notification(

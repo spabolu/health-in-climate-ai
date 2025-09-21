@@ -131,7 +131,7 @@ export default function RiskAnalysisChart({
           confidenceLower,
           confidenceUpper,
           predictedRisk,
-          riskLevelValue: RISK_LEVELS[item.riskLevel].value,
+          riskLevelValue: RISK_LEVELS[item.riskLevel as keyof typeof RISK_LEVELS].value,
           displayTime: new Date(item.timestamp).toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
@@ -228,12 +228,12 @@ export default function RiskAnalysisChart({
                 <Badge
                   variant={data.riskLevel === 'critical' ? 'destructive' : 'secondary'}
                   style={{
-                    backgroundColor: RISK_LEVELS[data.riskLevel].color + '20',
-                    borderColor: RISK_LEVELS[data.riskLevel].color,
-                    color: RISK_LEVELS[data.riskLevel].color
+                    backgroundColor: RISK_LEVELS[data.riskLevel as keyof typeof RISK_LEVELS].color + '20',
+                    borderColor: RISK_LEVELS[data.riskLevel as keyof typeof RISK_LEVELS].color,
+                    color: RISK_LEVELS[data.riskLevel as keyof typeof RISK_LEVELS].color
                   }}
                 >
-                  {RISK_LEVELS[data.riskLevel].label}
+                  {RISK_LEVELS[data.riskLevel as keyof typeof RISK_LEVELS].label}
                 </Badge>
               </div>
             </div>
@@ -308,12 +308,12 @@ export default function RiskAnalysisChart({
             <Badge
               variant={currentRiskLevel === 'critical' ? 'destructive' : 'secondary'}
               style={{
-                backgroundColor: RISK_LEVELS[currentRiskLevel]?.color + '20',
-                borderColor: RISK_LEVELS[currentRiskLevel]?.color,
-                color: RISK_LEVELS[currentRiskLevel]?.color
+                backgroundColor: (currentRiskLevel !== 'unknown' ? RISK_LEVELS[currentRiskLevel as keyof typeof RISK_LEVELS]?.color : '#9CA3AF') + '20',
+                borderColor: currentRiskLevel !== 'unknown' ? RISK_LEVELS[currentRiskLevel as keyof typeof RISK_LEVELS]?.color : '#9CA3AF',
+                color: currentRiskLevel !== 'unknown' ? RISK_LEVELS[currentRiskLevel as keyof typeof RISK_LEVELS]?.color : '#9CA3AF'
               }}
             >
-              Current: {RISK_LEVELS[currentRiskLevel]?.label || 'Unknown'}
+              Current: {currentRiskLevel !== 'unknown' ? RISK_LEVELS[currentRiskLevel as keyof typeof RISK_LEVELS]?.label : 'Unknown'}
             </Badge>
           </div>
         </div>
@@ -499,7 +499,7 @@ export default function RiskAnalysisChart({
             <Scatter
               dataKey="riskScore"
               shape={(props: any) => {
-                if (!props.payload.incidentOccurred) return null;
+                if (!props.payload.incidentOccurred) return <g />;
                 return (
                   <circle
                     cx={props.cx}

@@ -1,6 +1,6 @@
 Thermal Comfort Model Metadata
 ==============================
-Created: 2025-09-20 19:09:40
+Created: 2025-09-20 23:15:44
 Model Type: XGBoost Classifier
 Number of Features: 55
 Target Classes: ['hot', 'neutral', 'slightly warm', 'warm']

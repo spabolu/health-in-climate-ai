@@ -80,7 +80,7 @@ export default function WorkerStatusGrid({
 
     // Apply status filter
     if (filterStatus !== 'all') {
-      filtered = filtered.filter(({ worker, prediction, isOnline }) => {
+      filtered = filtered.filter(({ prediction, isOnline }) => {
         if (filterStatus === 'offline') return !isOnline;
         if (!prediction) return filterStatus === 'safe';
 
@@ -99,7 +99,7 @@ export default function WorkerStatusGrid({
 
     // Apply sorting
     filtered.sort((a, b) => {
-      let aValue: any, bValue: any;
+      let aValue: string | number, bValue: string | number;
 
       switch (sortField) {
         case 'name':

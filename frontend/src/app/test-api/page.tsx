@@ -1,17 +1,25 @@
+/* eslint-disable no-console */
 'use client';
 
 import { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { BiometricData, DashboardMetrics } from '@/types/thermal-comfort';
+
+interface TestResults {
+  health?: { status: string; timestamp: string };
+  randomData?: BiometricData[];
+  metrics?: DashboardMetrics;
+}
 
 export default function TestAPIPage() {
-  const [results, setResults] = useState<any>({});
+  const [results, setResults] = useState<TestResults>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const testAPI = async () => {
     setLoading(true);
     setError(null);
-    const testResults: any = {};
+    const testResults: TestResults = {};
 
     try {
       console.log('🧪 Testing API connection...');

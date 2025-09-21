@@ -168,9 +168,9 @@ export default function ThermalComfortChart({
               <span className="text-sm text-gray-600">Thermal Comfort:</span>
               <Badge
                 style={{
-                  backgroundColor: thermalComfortColors[data.thermalComfortValue] + '20',
-                  borderColor: thermalComfortColors[data.thermalComfortValue],
-                  color: thermalComfortColors[data.thermalComfortValue]
+                  backgroundColor: thermalComfortColors[data.thermalComfortValue as keyof typeof thermalComfortColors] + '20',
+                  borderColor: thermalComfortColors[data.thermalComfortValue as keyof typeof thermalComfortColors],
+                  color: thermalComfortColors[data.thermalComfortValue as keyof typeof thermalComfortColors]
                 }}
               >
                 {data.thermalComfort}
@@ -181,9 +181,9 @@ export default function ThermalComfortChart({
               <Badge
                 variant={data.riskLevelValue === 4 ? 'destructive' : 'secondary'}
                 style={{
-                  backgroundColor: riskLevelColors[data.riskLevelValue] + '20',
-                  borderColor: riskLevelColors[data.riskLevelValue],
-                  color: riskLevelColors[data.riskLevelValue]
+                  backgroundColor: riskLevelColors[data.riskLevelValue as keyof typeof riskLevelColors] + '20',
+                  borderColor: riskLevelColors[data.riskLevelValue as keyof typeof riskLevelColors],
+                  color: riskLevelColors[data.riskLevelValue as keyof typeof riskLevelColors]
                 }}
               >
                 {data.riskLevel.toUpperCase()}

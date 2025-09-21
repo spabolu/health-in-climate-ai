@@ -172,9 +172,18 @@ def predict_batch():
         
         if not features_list:
             return jsonify({'error': 'No features list provided'}), 400
-        
+
+        if not isinstance(features_list, list):
+            return jsonify({'error': 'features_list must be a list of feature dictionaries'}), 400
+
+        if len(features_list) == 0:
+            return jsonify({'error': 'features_list cannot be empty'}), 400
+
         # Convert to DataFrame
-        features_df = pd.DataFrame(features_list)
+        try:
+            features_df = pd.DataFrame(features_list)
+        except Exception as e:
+            return jsonify({'error': f'Failed to convert features_list to DataFrame: {str(e)}'}), 400
         
         # Make predictions
         results = predictor.predict_batch(
@@ -206,7 +215,11 @@ def get_features():
         
         # Get feature template
         template = predictor.get_feature_template()
-        
+
+        # Ensure feature_columns is not None
+        if predictor.feature_columns is None:
+            return jsonify({'error': 'Model feature columns not loaded properly'}), 500
+
         # Categorize features
         hrv_features = [f for f in predictor.feature_columns if f.startswith('hrv_')]
         demo_features = [f for f in predictor.feature_columns if f in ['Gender', 'Age']]
@@ -263,7 +276,11 @@ def validate_features():
         features = data.get('features', {})
         if not features:
             return jsonify({'error': 'No features provided'}), 400
-        
+
+        # Ensure feature_columns is not None
+        if predictor.feature_columns is None:
+            return jsonify({'error': 'Model feature columns not loaded properly'}), 500
+
         # Check for required features
         required_features = set(predictor.feature_columns)
         provided_features = set(features.keys())
@@ -276,22 +293,22 @@ def validate_features():
         
         for feature, value in features.items():
             if feature in required_features:
-                # Check if value is numeric
+                # Check if value is numeric and convert it
                 try:
-                    float(value)
+                    numeric_value = float(value)
                 except (ValueError, TypeError):
                     validation_errors.append(f"{feature}: must be numeric, got {type(value).__name__}")
                     continue
-                
-                # Specific validations
-                if feature == 'Gender' and value not in [0, 1]:
-                    validation_errors.append(f"Gender: must be 0 (Female) or 1 (Male), got {value}")
-                elif feature == 'Age' and (value < 0 or value > 120):
-                    validation_errors.append(f"Age: must be between 0-120, got {value}")
-                elif feature == 'Temperature' and (value < -50 or value > 60):
-                    validation_errors.append(f"Temperature: unrealistic value {value}°C")
-                elif feature == 'Humidity' and (value < 0 or value > 100):
-                    validation_errors.append(f"Humidity: must be between 0-100%, got {value}")
+
+                # Specific validations using the converted numeric value
+                if feature == 'Gender' and numeric_value not in [0, 1]:
+                    validation_errors.append(f"Gender: must be 0 (Female) or 1 (Male), got {numeric_value}")
+                elif feature == 'Age' and (numeric_value < 0 or numeric_value > 120):
+                    validation_errors.append(f"Age: must be between 0-120, got {numeric_value}")
+                elif feature == 'Temperature' and (numeric_value < -50 or numeric_value > 60):
+                    validation_errors.append(f"Temperature: unrealistic value {numeric_value}°C")
+                elif feature == 'Humidity' and (numeric_value < 0 or numeric_value > 100):
+                    validation_errors.append(f"Humidity: must be between 0-100%, got {numeric_value}")
         
         is_valid = len(missing_features) == 0 and len(validation_errors) == 0
         
@@ -325,7 +342,7 @@ def generate_random():
         samples = []
         base = generate_base_features()
         
-        for i in range(num_samples):
+        for _ in range(num_samples):
             sample = base.copy()
             
             # Randomize temperature (main driver)

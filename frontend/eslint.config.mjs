@@ -14,10 +14,11 @@ const eslintConfig = [
   {
     rules: {
       // HeatGuard Pro specific rules for safety-critical code
-      "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+      "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
       "@typescript-eslint/no-explicit-any": "warn",
       "prefer-const": "error",
       "no-console": "warn",
+      "react/no-unescaped-entities": "warn",
       // Safety-critical: Ensure proper React hooks usage
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",

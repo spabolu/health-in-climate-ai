@@ -28,7 +28,6 @@ import {
   Eye,
   MoreVertical,
   Bell,
-  BellOff,
   Archive,
   Flag,
 } from 'lucide-react';

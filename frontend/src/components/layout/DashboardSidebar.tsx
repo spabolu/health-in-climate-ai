@@ -13,7 +13,6 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useHealthAlerts, useDashboardMetrics } from '@/hooks/use-thermal-comfort';
 import {
-  LayoutDashboard,
   Users,
   AlertTriangle,
   Activity,
@@ -157,20 +156,6 @@ export default function DashboardSidebar({ className = '' }: DashboardSidebarPro
     },
   ];
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'critical':
-        return 'text-red-600 bg-red-50 border-red-200';
-      case 'high':
-        return 'text-orange-600 bg-orange-50 border-orange-200';
-      case 'normal':
-        return 'text-blue-600 bg-blue-50 border-blue-200';
-      case 'low':
-        return 'text-gray-600 bg-gray-50 border-gray-200';
-      default:
-        return 'text-gray-600 bg-gray-50 border-gray-200';
-    }
-  };
 
   const isActive = (href: string) => {
     if (href === '/dashboard' && pathname === '/dashboard') return true;
@@ -340,7 +325,7 @@ export default function DashboardSidebar({ className = '' }: DashboardSidebarPro
                 </div>
                 <div className="flex justify-between">
                   <span>Avg Temperature:</span>
-                  <span className="font-medium">{metrics.average_temperature.toFixed(1)}°C</span>
+                  <span className="font-medium">{metrics.average_temperature?.toFixed(1) ?? '--'}°C</span>
                 </div>
               </>
             )}

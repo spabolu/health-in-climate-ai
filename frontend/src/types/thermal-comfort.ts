@@ -135,8 +135,8 @@ export interface DashboardMetrics {
   active_workers: number;
   workers_at_risk: number;
   critical_alerts: number;
-  average_temperature: number;
-  average_humidity: number;
+  average_temperature?: number;
+  average_humidity?: number;
   incidents_today: number;
   compliance_score: number; // 0-100 OSHA compliance score
 }

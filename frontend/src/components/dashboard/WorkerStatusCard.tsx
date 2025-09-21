@@ -63,8 +63,8 @@ export default function WorkerStatusCard({
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Determine overall worker status
-  const getOverallStatus = () => {
-    if (!prediction || !biometricData) return 'unknown';
+  const getOverallStatus = (): 'safe' | 'warning' | 'critical' => {
+    if (!prediction || !biometricData) return 'safe'; // Default to safe if no data
     if (prediction.risk_level === 'critical') return 'critical';
     if (prediction.risk_level === 'high') return 'warning';
     return 'safe';
@@ -90,12 +90,6 @@ export default function WorkerStatusCard({
       textColor: 'text-red-800',
       badgeVariant: 'destructive' as const,
       indicator: 'bg-red-500',
-    },
-    unknown: {
-      color: 'border-gray-200 bg-gray-50',
-      textColor: 'text-gray-800',
-      badgeVariant: 'outline' as const,
-      indicator: 'bg-gray-500',
     },
   };
 

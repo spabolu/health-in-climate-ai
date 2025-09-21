@@ -5,11 +5,10 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   PieChart,
@@ -24,11 +23,8 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import { ComplianceReport } from '@/types/thermal-comfort';
 import {
-  Shield,
   AlertTriangle,
-  CheckCircle,
   FileText,
   Calendar,
   TrendingUp,
@@ -102,7 +98,6 @@ export default function ComplianceOverview({
   onScheduleInspection,
   className = '',
 }: ComplianceOverviewProps) {
-  const [selectedTimeRange, setSelectedTimeRange] = useState<'1m' | '3m' | '6m' | '1y'>('6m');
 
   // Calculate compliance level and trends
   const complianceAnalysis = useMemo(() => {
@@ -173,12 +168,24 @@ export default function ComplianceOverview({
   ];
 
   // Custom tooltip for charts
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  interface TooltipPayload {
+    color: string;
+    dataKey: string;
+    value: number;
+  }
+
+  interface CustomTooltipProps {
+    active?: boolean;
+    payload?: TooltipPayload[];
+    label?: string;
+  }
+
+  const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-medium text-gray-900 mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry: TooltipPayload, index: number) => (
             <div key={index} className="flex items-center justify-between space-x-4">
               <div className="flex items-center space-x-2">
                 <div

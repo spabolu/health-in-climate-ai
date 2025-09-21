@@ -30,7 +30,7 @@ import {
 
 export default function DashboardPage() {
   const { metrics, isLoading, error } = useDashboardMetrics();
-  const { alerts, criticalAlerts, unacknowledgedAlerts } = useHealthAlerts();
+  const { criticalAlerts, unacknowledgedAlerts } = useHealthAlerts();
 
   return (
     <DashboardLayout>

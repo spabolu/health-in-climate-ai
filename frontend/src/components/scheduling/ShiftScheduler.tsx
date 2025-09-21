@@ -40,8 +40,8 @@ interface ShiftSchedulerProps {
 export default function ShiftScheduler({
   workers,
   shifts,
-  onScheduleWorker,
-  onUnscheduleWorker,
+  onScheduleWorker: _onScheduleWorker,
+  onUnscheduleWorker: _onUnscheduleWorker,
   className = '',
 }: ShiftSchedulerProps) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -109,7 +109,7 @@ export default function ShiftScheduler({
 
         {/* Shifts */}
         <Card className="p-6 lg:col-span-2">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Today's Shifts</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Today&apos;s Shifts</h3>
           <div className="space-y-4">
             {shifts.map(shift => (
               <div
