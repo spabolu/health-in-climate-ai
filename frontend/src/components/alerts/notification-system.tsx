@@ -192,7 +192,7 @@ export function NotificationSystem({
       {!isMinimized && activeNotifications.length > 0 && (
         <div className="fixed top-4 right-4 z-50 space-y-3 w-96 max-w-[calc(100vw-2rem)]">
           {/* Header with clear all button */}
-          <div className="flex items-center justify-between bg-card/95 backdrop-blur-sm rounded-lg border p-3 shadow-lg">
+          <div className="flex items-center justify-between bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 p-3 shadow-sm">
             <div className="flex items-center space-x-2">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               <span className="text-sm font-medium">
@@ -222,7 +222,7 @@ export function NotificationSystem({
           {activeNotifications.map((notification) => (
             <div
               key={notification.id}
-              className="bg-card/95 backdrop-blur-sm rounded-lg border shadow-lg transition-all duration-300 hover:shadow-xl"
+              className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm transition-all duration-300 hover:shadow-md"
             >
               <AlertNotification
                 alert={notification}
@@ -239,8 +239,8 @@ export function NotificationSystem({
 
       {/* Emergency Alert Overlay for Critical Alerts */}
       {alerts.some(a => a.severity === 'critical' && !a.acknowledged && !a.resolved) && (
-        <div className="fixed inset-0 z-40 bg-red-500/10 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card border border-red-500 rounded-lg p-6 shadow-2xl max-w-md w-full">
+        <div className="fixed inset-0 z-40 bg-red-500/5 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-red-300 rounded-lg p-6 shadow-md max-w-md w-full">
             <div className="text-center">
               <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4 animate-pulse" />
               <h3 className="text-lg font-bold text-red-700 mb-2">

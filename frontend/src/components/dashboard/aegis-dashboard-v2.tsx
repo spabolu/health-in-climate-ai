@@ -1,31 +1,29 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import {
-  Shield,
-  Users,
-  AlertTriangle,
-  Thermometer,
-  Wind,
-  Activity,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Heart,
-  Droplets,
-  Monitor,
-  Bell,
-  Calendar
-} from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { RealTimeMonitor } from './real-time-monitor'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Activity,
+  AlertTriangle,
+  Bell,
+  Calendar,
+  CheckCircle,
+  Clock,
+  Droplets,
+  Monitor,
+  Shield,
+  Thermometer,
+  Users,
+  Wind
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { AlertCenter } from '../alerts/alert-center'
-import { NotificationSystem } from '../alerts/notification-system'
+import { RealTimeMonitor } from './real-time-monitor'
+// import { NotificationSystem } from '../alerts/notification-system'
+import type { Alert, DashboardMetrics } from '@/types'
 import { ComplianceDashboard } from '../compliance/compliance-dashboard'
 import { ShiftScheduler } from '../scheduling/shift-scheduler'
-import type { DashboardMetrics, Worker, Alert } from '@/types'
 
 // Mock data for development - will be replaced with API calls
 const mockDashboardMetrics: DashboardMetrics = {
@@ -48,17 +46,17 @@ const mockDashboardMetrics: DashboardMetrics = {
     'very_uncomfortable': 2
   },
   location_metrics: {
-    'Factory Floor A': { workers_count: 25, active_alerts: 2, risk_level: 'moderate' },
-    'Factory Floor B': { workers_count: 22, active_alerts: 1, risk_level: 'low' },
-    'Warehouse': { workers_count: 18, active_alerts: 3, risk_level: 'high' },
+    'Construction Site A': { workers_count: 25, active_alerts: 2, risk_level: 'moderate' },
+    'Construction Site B': { workers_count: 22, active_alerts: 1, risk_level: 'low' },
+    'Machinery Operations': { workers_count: 18, active_alerts: 3, risk_level: 'high' },
     'Loading Dock': { workers_count: 15, active_alerts: 1, risk_level: 'moderate' },
     'Office Area': { workers_count: 7, active_alerts: 0, risk_level: 'low' }
   },
   timestamp: new Date().toISOString(),
   system_status: 'operational',
-  model_accuracy: 0.87,
+  model_accuracy: 0.928,
   data_quality_score: 0.92,
-  compliance_score: 0.95
+  compliance_score: 0.952
 }
 
 const mockRecentAlerts: Alert[] = [
@@ -151,10 +149,10 @@ export function AegisDashboard() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <NotificationSystem
+              {/* <NotificationSystem
                 alerts={alerts}
                 onAlertUpdate={setAlerts}
-              />
+              /> */}
               <Badge variant="success" className="flex items-center space-x-1">
                 <CheckCircle className="h-3 w-3" />
                 <span>{metrics.system_status.toUpperCase()}</span>
@@ -202,11 +200,11 @@ export function AegisDashboard() {
           >
             <Bell className="h-4 w-4 inline-block mr-2" />
             Alert Center
-            {alerts.filter(a => !a.acknowledged && !a.resolved).length > 0 && (
+            {/* {alerts.filter(a => !a.acknowledged && !a.resolved).length > 0 && (
               <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
                 {alerts.filter(a => !a.acknowledged && !a.resolved).length}
               </Badge>
-            )}
+            )} */}
           </button>
           <button
             onClick={() => setActiveTab('compliance')}
